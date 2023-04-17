@@ -1,9 +1,3 @@
-
-/* code reads Decagon GS3 sensor output to the serial terminal.
-WHITE wire: power supply/excitation, connected to 5v pin
-RED wire: data line, connected to Arduino pin 2 (or another interrupt-capable pin)
-bare wire: connected to GND
-*/
 #include <SDISerial.h>
  
  
@@ -11,11 +5,8 @@ bare wire: connected to GND
 #define NUMSAMPLES 5
 #define INVERTED 1
  
-int sensorDelay = 100;
-// bulk density used to calculate porewater conductivity (g/cm3)
+int sensorDelay = 100; 
 float bulkDens = 0.4;  
-// mineral density assumed to be 2.65 Mg/m3 (used 
-// in porewater calculation from eq. 3 from GS-3 manual)
 float theta = 1 - (bulkDens / 2.65); 
 char* samples; 
  
@@ -28,7 +19,7 @@ void setup() {
   sdi_serial_connection.begin();
   Serial.begin(9600); 
   Serial.println("CLEARDATA");
-  Serial.println("LABEL, soilMoistMean, degCMean");
+  Serial.println("LABEL, TIME, soilMoistMean, degCMean, status");
 }
  
  
@@ -40,7 +31,7 @@ void loop() {
   float soilMoist[NUMSAMPLES];
   float degC[NUMSAMPLES];
   float bulkEC[NUMSAMPLES];
-  float porewaterEC[NUMSAMPLES];
+  // float porewaterEC[NUMSAMPLES];
   float solutionEC[NUMSAMPLES];
    
   // mean values
@@ -48,7 +39,6 @@ void loop() {
   float soilMoistMean   = 0.0;
   float degCMean        = 0.0;
   float bulkECMean      = 0.0;
-  float porewaterECMean = 0.0;
   float solutionECMean  = 0.0;
  
   // take repeated samples
@@ -70,8 +60,6 @@ void loop() {
     degC[i] = atof(term1);
     term1 = strtok(NULL, "+");
     bulkEC[i] = atof(term1);
-    // see eqs. 1 + 2 from GS3 manual (dS/m)
-    porewaterEC[i] = ((80.3 - 0.37 * (degC[i] - 20)) * bulkEC[i] / 1000) / (dielectric[i] - 6);
    
    if (bulkEC[i] < 5) {
      soilMoist[i]  = (5.89 * pow(10.0, -6.0) * pow(dielectric[i], 3.0)) - (7.62 * pow(10.0, -4.0) * 
@@ -80,8 +68,6 @@ void loop() {
    soilMoist[i]  =  0.118 * sqrt(dielectric[i]) -0.117;
    }  
     // calculate EC of solution removed from a saturated soil paste, 
-    // according to Decagon GS3 manual
-    // see page 8 of GS3 manual (eq. 4)
     solutionEC[i] =  (bulkEC[i] / 1000 * soilMoist[i]) / theta; 
  
     // sum with each iteration
@@ -89,25 +75,34 @@ void loop() {
     soilMoistMean   += soilMoist[i];
     degCMean        += degC[i];
     bulkECMean      += bulkEC[i];
-    porewaterECMean += porewaterEC[i];
     solutionECMean  += solutionEC[i];
   }
    
   // Average readings for each parameter
-  dielMean        /= NUMSAMPLES;
   soilMoistMean   /= (NUMSAMPLES*2000);
   degCMean        /= NUMSAMPLES;
-  bulkECMean      /= (NUMSAMPLES / 0.001);
-  porewaterECMean /= NUMSAMPLES;
-  solutionECMean  /= NUMSAMPLES;
- 
 
 //  Serial.print("VWC");
-  Serial.print("DATA, ");
-  Serial.print(soilMoistMean, 3);
+  Serial.print("DATA, TIME, ");
+  Serial.print(soilMoistMean);
 //  Serial.print("Degree");
   Serial.print(", ");
-  Serial.println(degCMean, 1);
+  Serial.print(degCMean, 1);
+  Serial.print(", ");
+
+  char* status;
+  if(soilMoistMean < 30){
+    status = "low";
+    Serial.println(status);
+  }
+  else if(soilMoistMean < 70){
+    status = "good";
+    Serial.println(status);
+  }
+  else {
+    status = "high";
+    Serial.println(status);
+  }
 
   delay(sensorDelay);
 }
